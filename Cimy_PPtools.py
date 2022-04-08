@@ -1,9 +1,24 @@
-# Cimy's Python Pytorch Toolbox
+# Cimy's Python Pytorch Toolbox v1.0
+# 2022/04/08
 """
-    In this tools, the image show function show the multimodal fusion result.
-    If you want to show the single modal classification result need to modify it!
+      The toolbox that includes：
+       - * Data Preprocessing * (patching, dimensionality reduction, regularization, etc.),
+          - *** createPatches ***
+          - *** random_sample ***
+          - *** applyPCA ***
+          - *** normalization ***
+       - * Report Classification Results *,
+          - *** reports ***
+       - * Training, Validation, Testing *,
+          - *** val ***
+          - *** train ***
+          - *** test ***
+       - * Visual Classification Results *！
+          - *** label2color ***
+          - *** imshow_singlemodal *** If you train a single modal model please use imshow_singlemodal function!
+          - *** imshow_multimodal *** If you train a multiple modal model please use imshow_multimodal function!
+"""
 
-"""
 import torch.nn.functional as F
 import torch
 import matplotlib.pyplot as plt
@@ -35,7 +50,7 @@ def createPatches(X, y, windowSize, removeZeroLabels=False):
     margin = int((windowSize - 1) / 2)
     zeroPaddedX = np.pad(X, ((margin, margin), (margin, margin), (0, 0)), 'symmetric')
     zeroPaddedX = zeroPaddedX.reshape(zeroPaddedX.shape[2], zeroPaddedX.shape[0], zeroPaddedX.shape[1])
-    # split patches
+
     patchesData = np.zeros((X.shape[0] * X.shape[1], X.shape[2], windowSize, windowSize), dtype='float16')
     patchesLabels = np.zeros((X.shape[0] * X.shape[1]), dtype='float16')
     patchIndex = 0
@@ -447,7 +462,7 @@ def imshow_multimodal(model, patchesData_1, patchesData_2, patchesLabels, y_pred
     return X_result
 
 
-def imshow_singlemodal(patchesLabels, Result_all, testIndex, y_pred, background=1, imageID='PU', dpi = 800):
+def imshow_singlemodal(patchesLabels, Result_all, testIndex, y_pred, background=1, imageID='PU', dpi=800):
     """
         The final classification maps imshow function with single modal:
         Arguments:
