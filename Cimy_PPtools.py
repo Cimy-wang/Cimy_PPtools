@@ -309,14 +309,86 @@ def test(model, device, test_loader):
     return test_acc_temp, test_loss_temp, y_pred, target_1, (end_time_test - start_time_test).total_seconds()
 
 
-def imshow_result(model, patchesData_hsi, patchesData_lidar, patchesLabels, y_pred, DEVICE, BATCH_SIZE, imageID,
-                  testIndex, background, dpi):
+def label2color(imageID):
+    """
+        The label2color function:
+        Arguments:
+             imageID: The data set need to show
+        Return:
+             row:     The row of result
+             col:     The col of result
+             palette: The RGB image: Tensor: H x W x 3
+    """
+
+    global palette
+    global row
+    global col
+
+    if imageID == 'PU':  # PaviaU
+        row = 610
+        col = 340
+        palette = np.array([[192, 192, 192], [  0, 255,   0], [  0, 255, 255], [  0, 128,   0], [255,   0, 255],
+                            [165,  82,  41], [128,   0, 128], [255,   0,   0], [255, 255,   0]])
+    elif imageID == 'PC':  # PaviaC
+        row = 1096
+        col = 492
+        palette = np.array([[  0,   0, 255], [  0, 128,   0], [  0, 255,   0], [255,   0,   0], [142,  71,   2],
+                            [192, 192, 192], [  0, 255, 255], [246, 110,   0], [255, 255,   0]])
+    elif imageID == 'IN':  # Indian
+        row = 145
+        col = 145
+        palette = np.array([[140,  67,  46], [  0,   0, 255], [255, 100,   0], [  0, 255, 123], [164,  75, 155],
+                            [101, 174, 255], [118, 254, 172], [ 60,  91, 112], [255, 255,   0], [255, 255, 125],
+                            [255,   0, 255], [100,   0, 255], [  0, 172, 254], [  0, 255,   0], [171, 175,  80],
+                            [101, 193, 60]])
+    elif imageID == 'SA':  # Salinas
+        row = 512
+        col = 217
+        palette = np.array([[140,  67,  46], [  0,   0, 255], [255, 100,   0], [  0, 255, 123], [164,  75, 155],
+                            [101, 174, 255], [118, 254, 172], [ 60,  91, 112], [255, 255,   0], [255, 255, 125],
+                            [255,   0, 255], [100,   0, 255], [  0, 172, 254], [  0, 255,   0], [171, 175,  80],
+                            [101, 193, 60]])
+    elif imageID == 'DC_S':  # Washington_DC_small_map
+        row = 280
+        col = 307
+        palette = np.array([[204, 102, 102], [153,  51,   0], [204, 153,   0], [  0, 255,   0], [  0, 102,   0],
+                            [  0,  51, 255], [153, 153, 153]])
+    elif imageID == 'DC_B':  # Washington_DC_big_map
+        row = 1280
+        col = 307
+        palette = np.array([[203,  26,   0], [ 64,  64,  64], [251, 118,  19],
+                            [102, 254,  77], [ 51, 152,  26], [  0,   0, 254], [254, 254, 254]])
+    elif imageID == 'KSC':  # KSC
+        row = 512
+        col = 614
+        palette = np.array([[140,  67,  46], [  0,   0, 255], [255, 100,   0], [  0, 255, 123],  [164, 75, 155],
+                            [101, 174, 255], [118, 254, 172], [ 60,  91, 112], [255, 255,   0], [255, 255, 125],
+                            [255,   0, 255], [100,   0, 255], [  0, 172, 254]])
+    elif imageID == 'HU':  # Huston
+        row = 349
+        col = 1905
+        palette = np.array([[  0, 205,   0], [127, 255,   0], [ 46, 139,  87], [  0, 139,   0], [160,  82,  45],
+                            [  0, 255, 255], [255, 255, 255], [216, 191, 216], [255,   0,   0], [139,   0,   0],
+                            [  0,   0,   0], [255, 255,   0], [238, 154,   0], [ 85,  26, 139], [255, 127, 80]])
+    elif imageID == 'Trento':  # Trento
+        row = 166
+        col = 600
+        palette = np.array([[  0, 217,  89], [203,  26,   0], [251, 118,  19], [ 51, 254,  26], [ 51, 152,  26],
+                            [  0,   0, 251]])
+
+    palette = palette * 1.0 / 255
+
+    return row, col, palette
+
+
+def imshow_multimodal(model, patchesData_1, patchesData_2, patchesLabels, y_pred, DEVICE, BATCH_SIZE, imageID,
+                      testIndex, background, dpi):
     """
         The final classification maps imshow function:
         Arguments:
              model:             The trained models
-             patchesData_hsi:   The patched hsi data
-             patchesData_lidar: The patched lidar data
+             patchesData_1:     The patched modal 1 data
+             patchesData_2:     The patched modal 2 data
              patchesLabels:     The patched data corresponding label
              y_pred:            The predicted results
              DEVICE:            Use GPU or CPU for training
@@ -328,81 +400,28 @@ def imshow_result(model, patchesData_hsi, patchesData_lidar, patchesLabels, y_pr
         Return:
              X_result:          The final label2RGB result: Tensor: H x W x 3
     """
-    global palette
-    global row
-    global col
+
     labels = patchesLabels
     num_class = int(labels.max())
-    if imageID == 'PU':  # PaviaU
-        row = 610
-        col = 340
-        palette = np.array([[192, 192, 192], [0, 255, 0], [0, 255, 255], [0, 128, 0], [255, 0, 255],
-                            [165, 82, 41], [128, 0, 128], [255, 0, 0], [255, 255, 0]])
-    elif imageID == 'PC':  # PaviaC
-        row = 1096
-        col = 492
-        palette = np.array([[0, 0, 255], [0, 128, 0], [0, 255, 0], [255, 0, 0], [142, 71, 2],
-                            [192, 192, 192], [0, 255, 255], [246, 110, 0], [255, 255, 0]])
-    elif imageID == 'IN':  # Indian
-        row = 145
-        col = 145
-        palette = np.array([[140, 67, 46], [0, 0, 255], [255, 100, 0], [0, 255, 123], [164, 75, 155],
-                            [101, 174, 255], [118, 254, 172], [60, 91, 112], [255, 255, 0], [255, 255, 125],
-                            [255, 0, 255], [100, 0, 255], [0, 172, 254], [0, 255, 0], [171, 175, 80],
-                            [101, 193, 60]])
-    elif imageID == 'SA':  # Salinas
-        row = 512
-        col = 217
-        palette = np.array([[140, 67, 46], [0, 0, 255], [255, 100, 0], [0, 255, 123], [164, 75, 155],
-                            [101, 174, 255], [118, 254, 172], [60, 91, 112], [255, 255, 0], [255, 255, 125],
-                            [255, 0, 255], [100, 0, 255], [0, 172, 254], [0, 255, 0], [171, 175, 80],
-                            [101, 193, 60]])
-    elif imageID == 'DC_S':  # Washington_DC_small_map
-        row = 280
-        col = 307
-        palette = np.array([[204, 102, 102], [153, 51, 0], [204, 153, 0], [0, 255, 0], [0, 102, 0],
-                            [0, 51, 255], [153, 153, 153]])
-    elif imageID == 'DC_B':  # Washington_DC_big_map
-        row = 1280
-        col = 307
-        palette = np.array([[203, 26, 0], [64, 64, 64], [251, 118, 19],
-                            [102, 254, 77], [51, 152, 26], [0, 0, 254], [254, 254, 254]])
-    elif imageID == 'KSC':  # KSC
-        row = 512
-        col = 614
-        palette = np.array([[140, 67, 46], [0, 0, 255], [255, 100, 0], [0, 255, 123], [164, 75, 155],
-                            [101, 174, 255], [118, 254, 172], [60, 91, 112], [255, 255, 0], [255, 255, 125],
-                            [255, 0, 255], [100, 0, 255], [0, 172, 254]])
-    elif imageID == 'HU':  # Huston
-        row = 349
-        col = 1905
-        palette = np.array([[0, 205, 0], [127, 255, 0], [46, 139, 87], [0, 139, 0], [160, 82, 45],
-                            [0, 255, 255], [255, 255, 255], [216, 191, 216], [255, 0, 0], [139, 0, 0],
-                            [0, 0, 0], [255, 255, 0], [238, 154, 0], [85, 26, 139], [255, 127, 80]])
-    elif imageID == 'Trento':  # Trento
-        row = 166
-        col = 600
-        palette = np.array([[0, 217, 89], [203, 26, 0], [251, 118, 19], [51, 254, 26], [51, 152, 26],
-                            [0, 0, 251]])
 
-    palette = palette * 1.0 / 255
+    row, col, palette = label2color(imageID)
+
     X_result = np.zeros((labels.shape[0], 3))
     if background == 1:
         y_pred = []
-        patchesData_hsi_torch, patchesData_lidar_torch, patchesLabel_torch \
-            = torch.from_numpy(np.array(patchesData_hsi).astype(np.float32)), \
-              torch.from_numpy(np.array(patchesData_lidar).astype(np.float32)), \
-              torch.from_numpy(patchesLabels)
+        patchesData_1_torch, patchesData_2_torch, patchesLabel_torch  = \
+            torch.from_numpy(np.array(patchesData_1).astype(np.float32)), \
+            torch.from_numpy(np.array(patchesData_2).astype(np.float32)), \
+            torch.from_numpy(patchesLabels)
 
-        patchesData_loader = DataLoader(dataset=TensorDataset(patchesData_hsi_torch,
-                                                              patchesData_lidar_torch,
+        patchesData_loader = DataLoader(dataset=TensorDataset(patchesData_1_torch,
+                                                              patchesData_2_torch,
                                                               patchesLabel_torch),
                                         batch_size=BATCH_SIZE)
 
-        for (patchesData_hsi, patchesData_lidar, target) in patchesData_loader:
-            patchesData_hsi, patchesData_lidar, target = patchesData_hsi.to(DEVICE), patchesData_lidar.to(
-                DEVICE), target.to(DEVICE)
-            output = model(patchesData_hsi, patchesData_lidar)
+        for (patchesData_1, patchesData_2, target) in patchesData_loader:
+            patchesData_1, patchesData_2, target = patchesData_1.to(DEVICE), patchesData_2.to(DEVICE), target.to(DEVICE)
+            output = model(patchesData_1, patchesData_2)
             y_pred_temp = output.max(1, keepdim=True)[1]
             y_pred_temp_1 = y_pred_temp.data.cpu().numpy()
             y_pred.extend(y_pred_temp_1)
@@ -414,6 +433,47 @@ def imshow_result(model, patchesData_hsi, patchesData_lidar, patchesLabels, y_pr
     else:
         Result_all = labels
         Result_all[testIndex] = np.array(y_pred).astype(np.float32)+1
+
+    for i in range(1, num_class + 1):
+        X_result[np.where(Result_all == i), 0] = palette[i - 1, 0]
+        X_result[np.where(Result_all == i), 1] = palette[i - 1, 1]
+        X_result[np.where(Result_all == i), 2] = palette[i - 1, 2]
+    X_result = np.reshape(X_result, (col, row, 3))
+    X_result_1 = X_result.swapaxes(0, 1)
+    plt.figure(dpi=dpi)
+    plt.axis("off")
+    plt.imshow(X_result_1)
+    plt.show()
+    return X_result
+
+
+def imshow_singlemodal(patchesLabels, Result_all, testIndex, y_pred, background=1, imageID='PU', dpi = 800):
+    """
+        The final classification maps imshow function with single modal:
+        Arguments:
+             Result_all:        The predicted result of all pixels
+             patchesLabels:     The patched data corresponding label
+             y_pred:            The predicted results
+             imageID:           The data set need to show
+             testIndex:         The test set coordinates
+             background:        Whether to show final maps with background
+             dpi:               The figure dpi
+        Return:
+             X_result:          The final label2RGB result: Tensor: H x W x 3
+    """
+
+    labels = patchesLabels
+    num_class = int(labels.max())
+
+    row, col, palette = label2color(imageID)
+
+    X_result = np.zeros((labels.shape[0], 3))
+
+    if background == 1:
+        Result_all = Result_all
+    else:
+        Result_all = labels
+        Result_all[testIndex] = y_pred
 
     for i in range(1, num_class + 1):
         X_result[np.where(Result_all == i), 0] = palette[i - 1, 0]
