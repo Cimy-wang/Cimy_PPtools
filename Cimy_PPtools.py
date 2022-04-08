@@ -84,13 +84,24 @@ def applyPCA(X, numComponents=75):
              numComponents: the hyperparameter of reduced dimension
         Return:
              newX:          Dimensionality reduced data
-             pca:
+             pca:           The calculated parameter of pca 
     """
     newX = np.reshape(X, (-1, X.shape[2]))
     pca = PCA(n_components=numComponents, whiten=True)
     newX = pca.fit_transform(newX)
     newX = np.reshape(newX, (X.shape[0], X.shape[1], numComponents))
     return newX, pca
+
+
+def normalization(data):
+    """
+        Normalizate the original data
+        Arguments:
+             data: The original input data
+        Return:    Normalizated data
+    """
+    _range = np.max(data) - np.min(data)
+    return (data - np.min(data)) / _range
 
 
 def reports(y_pred, Labels):
