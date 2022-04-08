@@ -15,6 +15,9 @@ from sklearn.metrics import classification_report, confusion_matrix
 import random
 import copy
 import datetime
+from prettytable import PrettyTable
+from tqdm import tqdm
+import time
 
 
 def createPatches(X, y, windowSize, removeZeroLabels=False):
@@ -84,7 +87,7 @@ def applyPCA(X, numComponents=75):
              numComponents: the hyperparameter of reduced dimension
         Return:
              newX:          Dimensionality reduced data
-             pca:           The calculated parameter of pca 
+             pca:           The calculated parameter of pca
     """
     newX = np.reshape(X, (-1, X.shape[2]))
     pca = PCA(n_components=numComponents, whiten=True)
@@ -125,22 +128,27 @@ def reports(y_pred, Labels):
     List.append(np.array(oa)), List.append(np.array(K)), List.append(np.array(aa))
     List = np.array(List)
     accuracy_matrix = np.concatenate((ca, List), axis=0)
-    # ==== Print table accuracy====
-    ind = [list(range(1, len(ca) + 1, 1)) + ['OA', 'AA', 'KA']][0]
-    target_names = [u'%s' % l for l in ind]
-    last_line_heading = 'avg / total'
-    name_width = max(len(cn) for cn in target_names)
-    width = max(name_width, len(last_line_heading), 2)
-    headers = ["accuracy"]
-    head_fmt = u'{:>{width}s} ' + u' {:>9}' * len(headers)
-    report = head_fmt.format(u'', *headers, width=width)
-    report += u'\n\n'
-    rows = zip(target_names, accuracy_matrix)
-    row_fmt = u'{:>{width}s} ' + u' {:>9.{digits}4f}' u'\n'
-    for row1 in rows:
-        report += row_fmt.format(*row1, width=width, digits=2)
-    report += u'\n'
-    print(report)
+    # ==== Print table accuracy use PrettyTable====
+    x = PrettyTable()
+    x.add_column('index', [list(range(1, len(ca) + 1, 1)) + ['OA', 'AA', 'KA']][0])
+    x.add_column('Accuracy', accuracy_matrix)
+    print(x)
+    # ==== Print table accuracy use format====
+    # ind = [list(range(1, len(ca) + 1, 1)) + ['OA', 'AA', 'KA']][0]
+    # target_names = [u'%s' % l for l in ind]
+    # last_line_heading = 'avg / total'
+    # name_width = max(len(cn) for cn in target_names)
+    # width = max(name_width, len(last_line_heading), 2)
+    # headers = ["     accuracy"]
+    # head_fmt = u'{:>{width}s} ' + u' {:>9}' * len(headers)
+    # report = head_fmt.format(u'', *headers, width=width)
+    # report += u'\n\n'
+    # rows = zip(target_names, accuracy_matrix)
+    # row_fmt = u'{:>{width}s} ' + u' {:>9.{digits}4f}' u'\n'
+    # for row1 in rows:
+    #     report += row_fmt.format(*row1, width=width, digits=2)
+    # report += u'\n'
+    # print(report)
     return classification, confusion, accuracy_matrix
 
 
@@ -159,19 +167,28 @@ def val(model, val_loader, criterion):
     total_correct = 0
     eye = torch.eye(int(max(val_loader.dataset.tensors[2]) + 1)).cuda()
     avg_loss = 0.0
-    with torch.no_grad():
-        for i, (data_hsi, data_lidar, labels) in enumerate(val_loader):
-            data_hsi, data_lidar, labels = Variable(data_hsi).cuda(), Variable(data_lidar).cuda(), Variable(labels).cuda()
-            output = model(data_hsi, data_lidar)
-            labels = labels.to(torch.int64)
-            target_hot = eye[labels]
-            avg_loss = criterion(output, target_hot)
-            pred = output.data.max(1)[1]
-            total_correct += pred.eq(labels.data.view_as(pred)).sum()
-            acc = float(total_correct) / len(val_loader.dataset.tensors[0])
 
-    avg_loss /= len(val_loader.dataset.tensors[0])
-    acc = float(total_correct) / len(val_loader.dataset.tensors[0])
+    start_time = datetime.datetime.now()
+    with tqdm(
+            iterable=val_loader,
+    ) as t:
+        with torch.no_grad():
+            for i, (data_hsi, data_lidar, labels) in enumerate(val_loader):
+                data_hsi, data_lidar, labels = Variable(data_hsi).cuda(), Variable(data_lidar).cuda(), Variable(labels).cuda()
+                output = model(data_hsi, data_lidar)
+                labels = labels.to(torch.int64)
+                target_hot = eye[labels]
+                avg_loss = criterion(output, target_hot)
+                pred = output.data.max(1)[1]
+                total_correct += pred.eq(labels.data.view_as(pred)).sum()
+                acc = float(total_correct) / len(val_loader.dataset.tensors[0])
+                cur_time = datetime.datetime.now()
+                t.set_description_str(f"\33[39m[  Validation Set  ]")
+                t.set_postfix_str(f"Val_Loss = {avg_loss:.6f}, Val_Accuracy = {acc:.6f}, Time: {cur_time - start_time}\33[0m")
+                t.update()
+
+        avg_loss /= len(val_loader.dataset.tensors[0])
+        acc = float(total_correct) / len(val_loader.dataset.tensors[0])
 
     return acc, avg_loss
 
@@ -193,7 +210,6 @@ def train(model, criterion, device, train_loader, optimizer, EPOCHS, vis, val_lo
              model:                                               The trained models
              (end_time_train - start_time_train).total_seconds(): The training time
     """
-
     global best_model
     acc_temp = 0
     epoch_temp = 1
@@ -203,19 +219,25 @@ def train(model, criterion, device, train_loader, optimizer, EPOCHS, vis, val_lo
         start_time = datetime.datetime.now()
         model.train()
         number = 0
-        for batch_idx, (data_hsi, data_lidar, target) in enumerate(train_loader):
-            data_hsi, data_lidar, target = data_hsi.to(device), data_lidar.to(device), target.to(device)
-            optimizer.zero_grad()
-            output = model(data_hsi, data_lidar)
-            target = target.to(torch.int64)
-            target_hot = eye[target]
-            loss = criterion(output, target_hot)
-            loss.backward()
-            optimizer.step()
-            output = output.argmax(dim=1)
-            number += output.eq(target).float().sum().item()
-            cur_time = datetime.datetime.now()
-
+        with tqdm(
+                iterable=train_loader,
+        ) as t:
+            for batch_idx, (data_hsi, data_lidar, target) in enumerate(train_loader):
+                t.set_description_str(f"\33[34m[Epoch {epoch:03d}/ {(EPOCHS):03d}/ {(itera):02d}]")
+                data_hsi, data_lidar, target = data_hsi.to(device), data_lidar.to(device), target.to(device)
+                optimizer.zero_grad()
+                output = model(data_hsi, data_lidar)
+                target = target.to(torch.int64)
+                target_hot = eye[target]
+                loss = criterion(output, target_hot)
+                loss.backward()
+                optimizer.step()
+                output = output.argmax(dim=1)
+                number += output.eq(target).float().sum().item()
+                cur_time = datetime.datetime.now()
+                t.set_postfix_str(
+                    f"Tra_Loss = {loss.item():.6f}, Tra_Accuracy = {number / len(train_loader.dataset):.6f}, Time: {cur_time - start_time}\33[0m")
+                t.update()
         val_acc, avg_loss = val(model, val_loader, criterion)
         if acc_temp <= val_acc:
             print('Best_Val_Value changed: from %f to %f;' % (acc_temp, val_acc), end="\t")
@@ -223,17 +245,17 @@ def train(model, criterion, device, train_loader, optimizer, EPOCHS, vis, val_lo
             acc_temp = val_acc
             best_model = copy.deepcopy(model)
             print('Best Classification Accuracy %f， Best Classification loss %f； Best Epoch： %d' % (
-                acc_temp, avg_loss, epoch_temp), end="\n")
+            acc_temp, avg_loss, epoch_temp), end="\n")
         else:
             print('Best Classification Accuracy %f， Best Classification loss %f； Best Epoch： %d' % (
-                acc_temp, avg_loss, epoch_temp), end="\n")
+            acc_temp, avg_loss, epoch_temp), end="\n")
         vis.line(Y=[[number / len(train_loader.dataset), val_acc]],
                  X=[epoch],
                  win='acc {}'.format(itera),
                  opts=dict(title='acc', legend=['acc', 'val_acc']),
                  update='append')
-
-        model = best_model
+        time.sleep(0.1)
+    model = best_model
     end_time_train = datetime.datetime.now()
     print('||======= Train Time for % s' % (end_time_train - start_time_train), '======||')
     return model, (end_time_train - start_time_train).total_seconds()
