@@ -35,7 +35,8 @@ from tqdm import tqdm
 import time
 
 
-def createPatches(X, y, windowSize, removeZeroLabels=False):
+# The input shape of model build in tensorflow and keras is [None, H, L, C]
+def createPatches_TF(X, y, windowSize, removeZeroLabels=False):
     """
         Create the image patches
         Arguments:
@@ -49,8 +50,38 @@ def createPatches(X, y, windowSize, removeZeroLabels=False):
     """
     margin = int((windowSize - 1) / 2)
     zeroPaddedX = np.pad(X, ((margin, margin), (margin, margin), (0, 0)), 'symmetric')
-    zeroPaddedX = zeroPaddedX.reshape(zeroPaddedX.shape[2], zeroPaddedX.shape[0], zeroPaddedX.shape[1])
+    # split patches
+    patchesData = np.zeros((X.shape[0] * X.shape[1], windowSize, windowSize, X.shape[2]), dtype='float16')
+    patchesLabels = np.zeros((X.shape[0] * X.shape[1]), dtype='float16')
+    patchIndex = 0
+    for c in range(margin, zeroPaddedX.shape[1] - margin):
+        for r in range(margin, zeroPaddedX.shape[0] - margin):
+            patch = zeroPaddedX[r - margin:r + margin + 1, c - margin:c + margin + 1, :]
+            patchesData[patchIndex, :, :, :] = patch
+            patchesLabels[patchIndex] = y[r - margin, c - margin]
+            patchIndex = patchIndex + 1
+    if removeZeroLabels:
+        patchesData = patchesData[patchesLabels > 0, :, :, :]
+        patchesLabels = patchesLabels[patchesLabels > 0]
+        patchesLabels -= 1
+    return patchesData, patchesLabels
 
+# The input shape of model build in pytorch is [None, C, H, W]
+def createPatches_Torch(X, y, windowSize, removeZeroLabels=False):
+    """
+        Create the image patches
+        Arguments:
+             X:                The original input data
+             y:                The corresponding label
+             windowSize:       Patch window size
+             removeZeroLabels: Whether to return the patch results of entire image, default=False.
+        Return:
+             patchesData:      Patch data
+             patchesLabels:    Patch data with corresponding label
+    """
+    margin = int((windowSize - 1) / 2)
+    zeroPaddedX = np.transpose(np.pad(X, ((margin, margin), (margin, margin), (0, 0)), 'symmetric'), (2, 0, 1))
+    # split patches
     patchesData = np.zeros((X.shape[0] * X.shape[1], X.shape[2], windowSize, windowSize), dtype='float16')
     patchesLabels = np.zeros((X.shape[0] * X.shape[1]), dtype='float16')
     patchIndex = 0
@@ -65,33 +96,6 @@ def createPatches(X, y, windowSize, removeZeroLabels=False):
         patchesLabels = patchesLabels[patchesLabels > 0]
         patchesLabels -= 1
     return patchesData, patchesLabels
-
-
-def random_sample(train_sample, validate_sample, Labels):
-    """
-        Randomly generate training, validate, and test sets
-        Arguments:
-             train_sample:                         The vector contains the number of training samples per class
-             validate_sample:                      The vector contains the number of validate samples per class
-             Labels:                               The ground truth data
-        Return:
-             TrainIndex, ValidateIndex, TestIndex: The vectorized coordinate values
-    """
-    num_classes = int(np.max(Labels))
-    TrainIndex = []
-    TestIndex = []
-    ValidateIndex = []
-    for i in range(num_classes):
-        train_sample_temp = train_sample[i]
-        validate_sample_temp = validate_sample[i]
-        index = np.where(Labels == (i + 1))[0]
-        Train_Validate_Index = random.sample(range(0, int(index.size)), train_sample_temp + validate_sample_temp)
-        TrainIndex = np.hstack((TrainIndex, index[Train_Validate_Index[0:train_sample_temp]])).astype(np.int32)
-        ValidateIndex = np.hstack((ValidateIndex, index[Train_Validate_Index[train_sample_temp:100000]])).astype(np.int32)
-        Test_Index = [index[i] for i in range(0, len(index), 1) if i not in Train_Validate_Index]
-        TestIndex = np.hstack((TestIndex, Test_Index)).astype(np.int32)
-
-    return TrainIndex, ValidateIndex, TestIndex
 
 
 def applyPCA(X, numComponents=75):
