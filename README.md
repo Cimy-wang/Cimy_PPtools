@@ -6,7 +6,9 @@ If you have any questions, please communicate with me in a timely manner.
 The toolbox that includes：
    - * Data Preprocessing * (patching, dimensionality reduction, regularization, etc.),
       - *** createPatches *** [Please be mindful of your development framework.]
+      
             - The input size of Tensorflow and Keras: [B, H, W, C]
+            
             - The input size of Pytorch: [B, C, H, W]
       - *** random_sample ***
       - *** applyPCA ***
